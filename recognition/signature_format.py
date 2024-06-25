@@ -1,14 +1,15 @@
 #!/usr/bin/python3
-#-*- encoding: Utf-8 -*-
-from typing import Dict, List, Set, Sequence, Union, Any
+
+from typing import Dict, List
 from base64 import b64decode, b64encode
-from math import log, exp, sqrt
+from math import exp, sqrt
 from binascii import crc32
 from enum import IntEnum
 from io import BytesIO
 from ctypes import *
 
 DATA_URI_PREFIX = 'data:audio/vnd.shazam.sig;base64,'
+
 
 class SampleRate(IntEnum): # Enum keys are sample rates in Hz
     
@@ -18,6 +19,7 @@ class SampleRate(IntEnum): # Enum keys are sample rates in Hz
     _32000 = 4
     _44100 = 5
     _48000 = 6
+
 
 class FrequencyBand(IntEnum): # Enum keys are frequency ranges in Hz
     
@@ -63,9 +65,7 @@ class FrequencyPeak:
         
         return self.corrected_peak_frequency_bin * (self.sample_rate_hz / 2 / 1024 / 64)
         
-        # ^ Convert back a FFT bin to a frequency, given a 16 KHz sample
-        # rate, 1024 useful bins and the multiplication by 64 made before
-        # storing the information
+        # ^ Convert back a FFT bin to a frequency, given a 16 KHz sample rate, 1024 useful bins and the multiplication by 64 made before storing the information
 
     
     def get_amplitude_pcm(self) -> float:
@@ -78,10 +78,8 @@ class FrequencyPeak:
         
         return (self.fft_pass_number * 128) / self.sample_rate_hz
         
-        # ^ Assume that new FFT bins are emitted every 128 samples, on a
-        # standard 16 KHz sample rate basis.
-        
-        
+        # ^ Assume that new FFT bins are emitted every 128 samples, on a standard 16 KHz sample rate basis.
+
 
 class DecodedMessage:
     
@@ -277,7 +275,3 @@ class DecodedMessage:
     def encode_to_uri(self) -> str:
         
         return DATA_URI_PREFIX + b64encode(self.encode_to_binary()).decode('ascii')
-    
-
-
-

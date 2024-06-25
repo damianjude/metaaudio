@@ -1,15 +1,13 @@
 #!/usr/bin/python3
-#-*- encoding: Utf-8 -*-
-from numpy import fft, array as nparray, maximum, log, hanning, mean, abs, round
-from typing import Dict, List, Set, Sequence, Union, Optional, Any
-from struct import pack, unpack
-from enum import IntEnum
+
+from numpy import fft, array as nparray, maximum, log, hanning
+from typing import  List, Optional, Any
 from copy import copy
 
-HANNING_MATRIX = hanning(2050)[1:-1] # Wipe trailing and leading zeroes
+HANNING_MATRIX = hanning(2050)[1:-1]
 
 
-from signature_format import DecodedMessage, FrequencyPeak, RawSignatureHeader, FrequencyBand
+from recognition.signature_format import DecodedMessage, FrequencyPeak, FrequencyBand
 
 
 class RingBuffer(list):
@@ -37,8 +35,7 @@ class SignatureGenerator:
     
     def __init__(self):
         
-        # Used when storing input that will be processed when requiring to
-        # generate a signature:
+        # Used when storing input that will be processed when requiring to generate a signature:
         
         self.input_pending_processing : List[int] = [] # Signed 16-bits, 16 KHz mono samples to be processed
         
@@ -57,8 +54,7 @@ class SignatureGenerator:
         self.MAX_TIME_SECONDS = 3.1
         self.MAX_PEAKS = 255
         
-        # The object that will hold information about the next fingerpring
-        # to be produced
+        # The object that will hold information about the next fingerpring to be produced
         
         self.next_signature = DecodedMessage()
         self.next_signature.sample_rate_hz = 16000
@@ -261,4 +257,3 @@ class SignatureGenerator:
                         self.next_signature.frequency_band_to_sound_peaks[band].append(
                             FrequencyPeak(fft_number, int(peak_magnitude), int(corrected_peak_frequency_bin), 16000)
                         )
-                        
