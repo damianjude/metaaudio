@@ -125,7 +125,7 @@ if __name__ == "__main__":
             signature = signature_generator.get_next_signature()
             
             if not signature:
-                print(dumps(results, indent = 4, ensure_ascii = False))
+                stderr.write("No signature")
                 break
             
             results = recognize_song_from_signature(signature)
