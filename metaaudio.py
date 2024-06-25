@@ -77,9 +77,10 @@ def setmp3metadata(filepath, metadata, coverartimage):
                 )
             )
 
+        os.remove(coverartimage)
+
     # Save the updated tags to the audio file
     audio.save()
-    os.remove(coverartimage)
 
 if __name__ == "__main__":
     parser = ArgumentParser(prog="metaaudio", description="Generate a Shazam fingerprint from a sound file, perform song recognition towards Shazam's servers and print obtained information to the standard output")
