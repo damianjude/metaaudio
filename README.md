@@ -18,9 +18,9 @@ MetaAudio is a Python program that recognizes songs using the Shazam API, fetche
 1. **Install FFmpeg**:
 
    - **Windows**: 
-   ```bash
-   winget install "FFmpeg (Essentials Build)"
-   ```
+    ```bash
+    winget install "FFmpeg (Essentials Build)"
+    ```
    - **macOS**: Use Homebrew:
      ```bash
      brew install ffmpeg
