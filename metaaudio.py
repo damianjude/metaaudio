@@ -1,18 +1,13 @@
 #!/usr/bin/python3
 
-from curses import meta
 import os
 from sys import stderr
 from argparse import ArgumentParser
 from pydub import AudioSegment
-from json import dumps, loads
 import requests
-from mutagen.easyid3 import EasyID3
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3
 from mutagen.id3._frames import APIC, TIT2, TPE1, TALB, TCON, TPUB, TYER
-from mutagen.id3._util import error
-from mutagen.flac import FLAC, Picture
 
 from recognition.communication import recognize_song_from_signature
 from recognition.algorithm import SignatureGenerator
@@ -83,7 +78,7 @@ def setmp3metadata(filepath, metadata, coverartimage):
     audio.save()
 
 if __name__ == "__main__":
-    parser = ArgumentParser(prog="metaaudio", description="Generate a Shazam fingerprint from a sound file, perform song recognition towards Shazam's servers and print obtained information to the standard output")
+    parser = ArgumentParser(prog="metaaudio", description="Generate a Shazam fingerprint from a sound file, perform song recognition towards Shazam's servers and print obtained information to the standard output (only .MP3 files are supported)")
     
     parser.add_argument("input_dir", help="The directory containing .MP3 files to recognise")
     parser.print_help()
@@ -98,7 +93,7 @@ if __name__ == "__main__":
             if os.path.isfile(file_path) and file_path.lower().endswith((".mp3")):
                 music.append(file_path)
     else:
-        stderr.write("Directory not found\n")
+        stderr.write(f"Directory not found: {args.input_dir}\n")
     
     for filepath in music:
 
