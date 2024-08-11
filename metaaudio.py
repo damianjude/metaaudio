@@ -9,7 +9,7 @@ from mutagen.mp3 import MP3
 from mutagen.id3 import ID3
 from mutagen.id3._frames import APIC, TIT2, TPE1, TALB, TCON, TPUB, TYER
 
-from recognition.communication import recognize_song_from_signature
+from recognition.communication import recognise_song_from_signature
 from recognition.algorithm import SignatureGenerator
 
 def downloadcoverart(url, filepath):
@@ -123,7 +123,7 @@ if __name__ == "__main__":
                 stderr.write("No signature")
                 break
             
-            results = recognize_song_from_signature(signature)
+            results = recognise_song_from_signature(signature)
             
             if results["matches"]:
                 metadata = extractmetadata(results)
@@ -133,5 +133,5 @@ if __name__ == "__main__":
                 break
             
             else:
-                stderr.write(f"Note: No matching songs for {os.path.splitext(os.path.basename(filepath))[0]} the first {signature_generator.samples_processed / 16000} seconds, trying to recognize more input...\n")
+                stderr.write(f"Note: No matching songs for {os.path.splitext(os.path.basename(filepath))[0]} the first {signature_generator.samples_processed / 16000} seconds, trying to recognise more input...\n")
                 stderr.flush()

@@ -14,7 +14,7 @@ locale = ('en_US').split('.')[0]
 first_uuid = str(uuid5(NAMESPACE_DNS, str(getnode()))).upper()
 second_uuid = str(uuid5(NAMESPACE_URL, str(getnode())))
 
-def recognize_song_from_signature(signature : DecodedMessage) -> dict:
+def recognise_song_from_signature(signature : DecodedMessage) -> dict:
 
     fuzz = random() * 15.3 - 7.65
 
