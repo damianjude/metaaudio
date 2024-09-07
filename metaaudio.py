@@ -78,7 +78,7 @@ def setmp3metadata(filepath, metadata, coverartimage):
     audio.save()
 
 if __name__ == "__main__":
-    parser = ArgumentParser(prog="metaaudio", description="Generate a Shazam fingerprint from a sound file, perform song recognition towards Shazam's servers and print obtained information to the standard output (only .MP3 files are supported)")
+    parser = ArgumentParser(prog="metaaudio", description="Generate a Shazam fingerprint from a sound file, perform song recognition towards Shazam's servers and append the metadata the audio file (only .MP3 files are supported)")
     
     parser.add_argument("input_dir", help="The directory containing .MP3 files to recognise")
     parser.print_help()
