@@ -1,42 +1,49 @@
 # MetaAudio
 
-MetaAudio is a Python program that recognises songs using Shazam's service, fetches song metadata, and applies this metadata to the song file.
+**MetaAudio** is a lightweight Python tool that recognises songs using Shazam’s service, fetches accurate song metadata, and applies it directly to your music files.
+
+---
+
+## Features
+
+- Recognises songs via Shazam
+- Retrieves metadata including title, artist, album, genre, and cover art
+- Writes metadata directly to music files
+- Provides a tool to remove all metadata if needed
+
+---
 
 ## Installation
 
-1. **Install FFmpeg**:
+1. **Clone this repository**:
 
-   - **Windows**: 
-    ```bash
-    winget install "FFmpeg (Essentials Build)"
-    ```
-   - **macOS**: Use Homebrew:
-     ```bash
-     brew install ffmpeg
-     ```
-   - **Linux**: Use your distribution's package manager, for example:
-     ```bash
-     sudo apt install ffmpeg
-     ```
+2. **Install Python dependencies**:
 
-2. **Clone this repo**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-3. **Install Python dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+---
 
 ## Usage
 
-1. **To recognise songs and update metadata:**
+- **Recognise songs and update metadata**:
+
   ```bash
   python3 metaaudio.py /path/to/your/music/directory
   ```
 
-2. **To remove metadata from all music files in a given directory:**
+- **Remove all metadata from music files**:
+
   ```bash
   python3 removemetadata.py /path/to/your/music/directory
   ```
 
+---
+
 ## Known Issues
-**Misrecognition by Shazam**: Sometimes, Shazam's servers may misrecognise a song, resulting in incorrect metadata such as the song's name or artwork being different from what the song actually is. This is a known issue with the Shazam service and not with the MetaAudio tool itself. This is why I created `removemetadata.py`.
+
+- **Misrecognition by Shazam**:\
+  Occasionally, Shazam may incorrectly identify a song, resulting in wrong metadata (such as title or artwork).\
+  This is a limitation of the Shazam service itself, not MetaAudio.\
+  For such cases, use the `removemetadata.py` tool to clear incorrect tags.
