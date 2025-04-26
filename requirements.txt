@@ -1,5 +1,5 @@
 numpy>=2.0.0
-pydub>=0.25.1
+resample>=0.4.3
+soundfile>=0.13.1
 requests>=2.32.3
-pytz>=2022.1
 mutagen>=1.47.0
