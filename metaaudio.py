@@ -5,6 +5,7 @@ import requests
 import numpy as np
 import resampy
 import soundfile as sf
+import time
 
 from pathlib import Path
 from argparse import ArgumentParser
@@ -99,6 +100,9 @@ def main():
         description="Generate a Shazam fingerprint from a sound file, perform song recognition towards Shazam's servers and append the metadata to the audio file (only .MP3 files are supported)"
     )
     parser.add_argument("input_dir", help="The directory containing .MP3 files to recognise")
+    parser.add_argument("--rename", action="store_true", help="Rename MP3 files to '<artist> - <title>.mp3' format")
+    parser.add_argument("--overwrite", action="store_true", help="Overwrite existing files when renaming (requires --rename)")
+    parser.add_argument("--delay", type=float, default=0, help="Delay in seconds between processing files (default: 0)")
     args = parser.parse_args()
 
     input_dir = Path(args.input_dir)
@@ -114,6 +118,23 @@ def main():
         sys.exit(1)
 
     for filepath in mp3_files:
+
+        # Skip files that already have artist metadata not equal to 'Unknown'
+        try:
+            audio = MP3(filepath)
+            artist = None
+            if audio.tags is not None:
+                id3 = ID3(filepath)
+                if 'TPE1' in id3:
+                    artist = id3['TPE1'].text[0]
+            if artist and artist.strip().lower() != 'unknown':
+                print(f"Skipping {filepath.name}: artist metadata already set to '{artist}'")
+                continue
+        except Exception as e:
+            print(f"Warning: Could not read metadata from {filepath.name}: {e}", file=sys.stderr)
+
+
+        time.sleep(args.delay)  # Sleep to avoid sending requests too quickly
         samples = load_audio(filepath)
 
         signature_generator = SignatureGenerator()
@@ -140,6 +161,28 @@ def main():
                 metadata = extract_metadata(results)
                 coverart_path = download_cover_art(metadata["coverarturl"], filepath)
                 set_mp3_metadata(filepath, metadata, coverart_path)
+                
+                # Rename file to '<artist> - <title>.mp3' if --rename flag is set
+                if args.rename:
+                    artist = metadata.get("artist", "Unknown Artist").strip().replace("/", "-")
+                    title = metadata.get("title", "Unknown Title").strip().replace("/", "-")
+                    new_name = f"{artist} - {title}.mp3"
+                    new_path = filepath.with_name(new_name)
+                    
+                    if new_path != filepath:
+                        if new_path.exists():
+                            if args.overwrite:
+                                new_path.unlink()
+                                filepath.rename(new_path)
+                                print(f"Renamed file to {new_name}")
+                            else:
+                                print(f"File {new_name} already exists, not renaming. Use --overwrite to replace existing files.", file=sys.stderr)
+                        else:
+                            filepath.rename(new_path)
+                            print(f"Renamed file to {new_name}")
+                    else:
+                        print(f"File already has the correct name: {new_name}")
+                
                 print(f"Finished writing metadata for {filepath.stem}.mp3")
                 break
             else:

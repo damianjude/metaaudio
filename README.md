@@ -33,11 +33,35 @@
   python3 metaaudio.py /path/to/your/music/directory
   ```
 
+- **Rename files with optional overwrite**:
+  Use the `--rename` argument to automatically rename mp3 files to `<artist> - <title>.mp3`:
+  ```bash
+  python3 metaaudio.py /path/to/your/music/directory --rename
+  ```
+
+  And `--overwrite` to overwrite `<artist> - <title>.mp3` if it already exists:
+
+  ```bash
+  python3 metaaudio.py /path/to/your/music/directory --rename --overwrite
+  ```
+
+- **Configure delay between processing files**:
+  By default, there is no delay (i.e., 0 seconds) between processing files, but a delay (in seconds) can be added using `--delay`. This can help avoid Shazham API rate limiting issues.
+  ```bash
+  python3 metaaudio.py /path/to/your/music/directory --delay 0.5
+  ```
+
 - **Remove all metadata from music files**:
 
   ```bash
   python3 removemetadata.py /path/to/your/music/directory
   ```
+
+### Command-line Options
+
+- `--rename`: Rename MP3 files to `<artist> - <title>.mp3` format
+- `--overwrite`: Overwrite existing files when renaming (requires `--rename`)
+- `--delay`: Delay in seconds between processing files (default: 0.5)
 
 ---
 
