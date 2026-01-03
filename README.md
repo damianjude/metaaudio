@@ -46,7 +46,7 @@
   ```
 
 - **Configure delay between processing files**:
-  By default, there is no delay (i.e., 0 seconds) between processing files, but a delay (in seconds) can be added using `--delay`. This can help avoid Shazham API rate limiting issues.
+  By default, there is no delay (i.e., 0 seconds) between processing files, but a delay (in seconds) can be added using `--delay`. This can help avoid Shazam API rate limiting issues.
   ```bash
   python3 metaaudio.py /path/to/your/music/directory --delay 0.5
   ```
