@@ -61,7 +61,7 @@
 
 - `--rename`: Rename MP3 files to `<artist> - <title>.mp3` format
 - `--overwrite`: Overwrite existing files when renaming (requires `--rename`)
-- `--delay`: Delay in seconds between processing files (default: 0.5)
+- `--delay`: Delay in seconds between processing files (default: 0)
 
 ---
 
