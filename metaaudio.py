@@ -105,6 +105,9 @@ def main():
     parser.add_argument("--delay", type=float, default=0, help="Delay in seconds between processing files (default: 0)")
     args = parser.parse_args()
 
+    if args.overwrite and not args.rename:
+        print("--overwrite requires --rename; please specify both or remove --overwrite.", file=sys.stderr)
+        sys.exit(1)
     input_dir = Path(args.input_dir)
 
     if not input_dir.is_dir():
