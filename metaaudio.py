@@ -136,7 +136,6 @@ def main():
         except Exception as e:
             print(f"Warning: Could not read metadata from {filepath.name}: {e}", file=sys.stderr)
 
-
         time.sleep(args.delay)  # Sleep to avoid sending requests too quickly
         samples = load_audio(filepath)
 
