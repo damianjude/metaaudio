@@ -174,11 +174,13 @@ def main():
                             if args.overwrite:
                                 new_path.unlink()
                                 filepath.rename(new_path)
+                                filepath = new_path
                                 print(f"Renamed file to {new_name}")
                             else:
                                 print(f"File {new_name} already exists, not renaming. Use --overwrite to replace existing files.", file=sys.stderr)
                         else:
                             filepath.rename(new_path)
+                            filepath = new_path
                             print(f"Renamed file to {new_name}")
                     else:
                         print(f"File already has the correct name: {new_name}")
