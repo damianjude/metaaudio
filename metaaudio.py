@@ -168,7 +168,16 @@ def main():
                 if args.rename:
                     artist = metadata.get("artist", "Unknown Artist").strip().replace("/", "-")
                     title = metadata.get("title", "Unknown Title").strip().replace("/", "-")
-                    new_name = f"{artist} - {title}.mp3"
+                    # Construct new filename and ensure it does not exceed common filesystem limits (typically 255 characters)
+                    ext = filepath.suffix or ".mp3"
+                    base_name = f"{artist} - {title}"
+                    max_filename_length = 64
+                    max_base_length = max_filename_length - len(ext)
+                    if max_base_length < 1:
+                        max_base_length = 1
+                    if len(base_name) > max_base_length:
+                        base_name = base_name[:max_base_length].rstrip()
+                    new_name = f"{base_name}{ext}"
                     new_path = filepath.with_name(new_name)
                     
                     if new_path != filepath:
