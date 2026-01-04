@@ -11,7 +11,7 @@ from pathlib import Path
 from argparse import ArgumentParser
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3
-from mutagen.id3._frames import APIC, TIT2, TPE1, TALB, TCON, TPUB, TYER
+from mutagen.id3._frames import APIC, TIT2, TPE1, TALB, TCON, TPUB, TYER, TDRC
 
 from recognition.communication import recognise_song_from_signature
 from recognition.algorithm import SignatureGenerator
@@ -23,26 +23,44 @@ def download_cover_art(url, filepath):
 
     coverart_path = filepath.with_suffix('.jpeg')
 
-    response = requests.get(url)
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+    except requests.RequestException:
+        return None
     coverart_path.write_bytes(response.content)
 
     return coverart_path
 
 
 def extract_metadata(results):
-    track_info = results.get("track", {})
+    matches = results.get("matches") or []
+    match = matches[0] if matches else {}
+    track_info = match.get("track") or match.get("item") or results.get("track") or match or {}
 
-    metadata = {
-        "title": track_info.get("title", ""),
-        "artist": track_info.get("subtitle", ""),
-        "album": next((meta["text"] for meta in track_info.get("sections", [])[0].get("metadata", []) if meta["title"] == "Album"), ""),
-        "genre": track_info.get("genres", {}).get("primary", ""),
-        "label": next((meta["text"] for meta in track_info.get("sections", [])[0].get("metadata", []) if meta["title"] == "Label"), ""),
-        "coverarturl": track_info.get("images", {}).get("coverarthq", ""),
-        "year": next((meta["text"] for meta in track_info.get("sections", [])[0].get("metadata", []) if meta["title"] == "Released"), ""),
+    sections = track_info.get("sections", []) if isinstance(track_info, dict) else []
+    section_metadata = []
+    for section in sections:
+        metadata_block = section.get("metadata") or []
+        if metadata_block:
+            section_metadata = metadata_block
+            break
+
+    def find_meta(title):
+        return next((meta.get("text", "") for meta in section_metadata if meta.get("title") == title), "")
+
+    images = track_info.get("images", {}) if isinstance(track_info, dict) else {}
+    genres = track_info.get("genres", {}) if isinstance(track_info, dict) else {}
+
+    return {
+        "title": track_info.get("title", "") if isinstance(track_info, dict) else "",
+        "artist": track_info.get("subtitle", "") if isinstance(track_info, dict) else "",
+        "album": find_meta("Album"),
+        "genre": genres.get("primary", ""),
+        "label": find_meta("Label"),
+        "coverarturl": images.get("coverarthq", "") or images.get("coverart", ""),
+        "year": find_meta("Released") or find_meta("Year"),
     }
-
-    return metadata
 
 
 def set_mp3_metadata(filepath, metadata, coverart_path):
@@ -57,6 +75,7 @@ def set_mp3_metadata(filepath, metadata, coverart_path):
     audio.tags.add(TCON(encoding=3, text=metadata["genre"]))
     audio.tags.add(TPUB(encoding=3, text=metadata["label"]))
     audio.tags.add(TYER(encoding=3, text=metadata["year"]))
+    audio.tags.add(TDRC(encoding=3, text=metadata["year"]))
 
     if coverart_path and coverart_path.exists():
         audio.tags.add(
@@ -166,35 +185,38 @@ def main():
                 
                 # Rename file to '<artist> - <title>.mp3' if --rename flag is set
                 if args.rename:
-                    artist = metadata.get("artist", "Unknown Artist").strip().replace("/", "-")
-                    title = metadata.get("title", "Unknown Title").strip().replace("/", "-")
-                    # Construct new filename and ensure it does not exceed common filesystem limits (typically 255 characters)
+                    unsafe = '\\/:*?"<>|'
+
+                    def sanitize(text, fallback):
+                        cleaned = ''.join('-' if (c in unsafe or ord(c) < 32) else c for c in (text or fallback))
+                        cleaned = cleaned.strip()
+                        return cleaned or fallback
+
+                    artist = sanitize(metadata.get("artist", "Unknown Artist"), "Unknown Artist")
+                    title = sanitize(metadata.get("title", "Unknown Title"), "Unknown Title")
+
                     ext = filepath.suffix or ".mp3"
                     base_name = f"{artist} - {title}"
-                    max_filename_length = 64
-                    max_base_length = max_filename_length - len(ext)
-                    if max_base_length < 1:
-                        max_base_length = 1
+                    max_filename_length = 128
+                    max_base_length = max(1, max_filename_length - len(ext))
                     if len(base_name) > max_base_length:
                         base_name = base_name[:max_base_length].rstrip()
+
                     new_name = f"{base_name}{ext}"
                     new_path = filepath.with_name(new_name)
-                    
-                    if new_path != filepath:
-                        if new_path.exists():
-                            if args.overwrite:
-                                new_path.unlink()
-                                filepath.rename(new_path)
-                                filepath.rename(new_path)
-                                filepath = new_path
-                                print(f"Renamed file to {new_name}")
-                            else:
-                                print(f"File {new_name} already exists, not renaming. Use --overwrite to replace existing files.", file=sys.stderr)
+
+                    if new_path.exists() and new_path != filepath:
+                        if args.overwrite:
+                            new_path.unlink()
                         else:
-                            filepath.rename(new_path)
-                            filepath = new_path
-                            filepath = new_path
-                            print(f"Renamed file to {new_name}")
+                            print(f"File {new_name} already exists, not renaming. Use --overwrite to replace existing files.", file=sys.stderr)
+                            print(f"Finished writing metadata for {filepath.stem}.mp3")
+                            break
+
+                    if new_path != filepath:
+                        filepath.rename(new_path)
+                        filepath = new_path
+                        print(f"Renamed file to {new_name}")
                     else:
                         print(f"File already has the correct name: {new_name}")
                 

@@ -3,7 +3,7 @@
 from uuid import uuid5, getnode, NAMESPACE_DNS, NAMESPACE_URL
 from random import random, choice
 from zoneinfo import available_timezones
-from requests import post
+from requests import post, RequestException
 from time import time
 from recognition.signature_format import DecodedMessage
 from recognition.user_agent import USER_AGENTS
@@ -21,34 +21,42 @@ def recognise_song_from_signature(signature: DecodedMessage) -> dict:
     longitude = random() * 360 - 180 + fuzz
     timestamp_ms = int(time() * 1000)
 
-    return post(
-        f'https://amp.shazam.com/discovery/v5/en/US/android/-/tag/{_first_uuid}/{_second_uuid}',
-        params={
-            'sync': 'true',
-            'webv3': 'true',
-            'sampling': 'true',
-            'connected': '',
-            'shazamapiversion': 'v3',
-            'sharehub': 'true',
-            'video': 'v3'
-        },
-        headers={
-            'Content-Type': 'application/json',
-            'User-Agent': choice(USER_AGENTS),
-            'Content-Language': _locale
-        },
-        json={
-            "geolocation": {
-                "altitude": altitude,
-                "latitude": latitude,
-                "longitude": longitude
+    try:
+        response = post(
+            f'https://amp.shazam.com/discovery/v5/en/US/android/-/tag/{_first_uuid}/{_second_uuid}',
+            params={
+                'sync': 'true',
+                'webv3': 'true',
+                'sampling': 'true',
+                'connected': '',
+                'shazamapiversion': 'v3',
+                'sharehub': 'true',
+                'video': 'v3'
             },
-            "signature": {
-                "samplems": int(signature.number_samples / signature.sample_rate_hz * 1000),
+            headers={
+                'Content-Type': 'application/json',
+                'User-Agent': choice(USER_AGENTS),
+                'Content-Language': _locale
+            },
+            json={
+                "geolocation": {
+                    "altitude": altitude,
+                    "latitude": latitude,
+                    "longitude": longitude
+                },
+                "signature": {
+                    "samplems": int(signature.number_samples / signature.sample_rate_hz * 1000),
+                    "timestamp": timestamp_ms,
+                    "uri": signature.encode_to_uri()
+                },
                 "timestamp": timestamp_ms,
-                "uri": signature.encode_to_uri()
+                "timezone": choice(_timezones)
             },
-            "timestamp": timestamp_ms,
-            "timezone": choice(_timezones)
-        }
-    ).json()
+            timeout=15
+        )
+        response.raise_for_status()
+        return response.json()
+    except RequestException as exc:
+        return {"matches": [], "error": f"request_failed: {exc}"}
+    except ValueError:
+        return {"matches": [], "error": "invalid_json_response"}
