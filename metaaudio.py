@@ -5,12 +5,13 @@ import requests
 import numpy as np
 import resampy
 import soundfile as sf
+import time
 
 from pathlib import Path
 from argparse import ArgumentParser
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3
-from mutagen.id3._frames import APIC, TIT2, TPE1, TALB, TCON, TPUB, TYER
+from mutagen.id3._frames import APIC, TIT2, TPE1, TALB, TCON, TPUB, TYER, TDRC
 
 from recognition.communication import recognise_song_from_signature
 from recognition.algorithm import SignatureGenerator
@@ -22,26 +23,44 @@ def download_cover_art(url, filepath):
 
     coverart_path = filepath.with_suffix('.jpeg')
 
-    response = requests.get(url)
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+    except requests.RequestException:
+        return None
     coverart_path.write_bytes(response.content)
 
     return coverart_path
 
 
 def extract_metadata(results):
-    track_info = results.get("track", {})
+    matches = results.get("matches") or []
+    match = matches[0] if matches else {}
+    track_info = match.get("track") or match.get("item") or results.get("track") or match or {}
 
-    metadata = {
-        "title": track_info.get("title", ""),
-        "artist": track_info.get("subtitle", ""),
-        "album": next((meta["text"] for meta in track_info.get("sections", [])[0].get("metadata", []) if meta["title"] == "Album"), ""),
-        "genre": track_info.get("genres", {}).get("primary", ""),
-        "label": next((meta["text"] for meta in track_info.get("sections", [])[0].get("metadata", []) if meta["title"] == "Label"), ""),
-        "coverarturl": track_info.get("images", {}).get("coverarthq", ""),
-        "year": next((meta["text"] for meta in track_info.get("sections", [])[0].get("metadata", []) if meta["title"] == "Released"), ""),
+    sections = track_info.get("sections", []) if isinstance(track_info, dict) else []
+    section_metadata = []
+    for section in sections:
+        metadata_block = section.get("metadata") or []
+        if metadata_block:
+            section_metadata = metadata_block
+            break
+
+    def find_meta(title):
+        return next((meta.get("text", "") for meta in section_metadata if meta.get("title") == title), "")
+
+    images = track_info.get("images", {}) if isinstance(track_info, dict) else {}
+    genres = track_info.get("genres", {}) if isinstance(track_info, dict) else {}
+
+    return {
+        "title": track_info.get("title", "") if isinstance(track_info, dict) else "",
+        "artist": track_info.get("subtitle", "") if isinstance(track_info, dict) else "",
+        "album": find_meta("Album"),
+        "genre": genres.get("primary", ""),
+        "label": find_meta("Label"),
+        "coverarturl": images.get("coverarthq", "") or images.get("coverart", ""),
+        "year": find_meta("Released") or find_meta("Year"),
     }
-
-    return metadata
 
 
 def set_mp3_metadata(filepath, metadata, coverart_path):
@@ -56,6 +75,7 @@ def set_mp3_metadata(filepath, metadata, coverart_path):
     audio.tags.add(TCON(encoding=3, text=metadata["genre"]))
     audio.tags.add(TPUB(encoding=3, text=metadata["label"]))
     audio.tags.add(TYER(encoding=3, text=metadata["year"]))
+    audio.tags.add(TDRC(encoding=3, text=metadata["year"]))
 
     if coverart_path and coverart_path.exists():
         audio.tags.add(
@@ -99,8 +119,14 @@ def main():
         description="Generate a Shazam fingerprint from a sound file, perform song recognition towards Shazam's servers and append the metadata to the audio file (only .MP3 files are supported)"
     )
     parser.add_argument("input_dir", help="The directory containing .MP3 files to recognise")
+    parser.add_argument("--rename", action="store_true", help="Rename MP3 files to '<artist> - <title>.mp3' format")
+    parser.add_argument("--overwrite", action="store_true", help="Overwrite existing files when renaming (requires --rename)")
+    parser.add_argument("--delay", type=float, default=0, help="Delay in seconds between processing files (default: 0)")
     args = parser.parse_args()
 
+    if args.overwrite and not args.rename:
+        print("--overwrite requires --rename; please specify both or remove --overwrite.", file=sys.stderr)
+        sys.exit(1)
     input_dir = Path(args.input_dir)
 
     if not input_dir.is_dir():
@@ -114,7 +140,23 @@ def main():
         sys.exit(1)
 
     for filepath in mp3_files:
+
+        # Skip files that already have artist metadata not equal to 'Unknown'
+        try:
+            audio = MP3(filepath)
+            artist = None
+            if audio.tags is not None:
+                id3 = ID3(filepath)
+                if 'TPE1' in id3:
+                    artist = id3['TPE1'].text[0]
+            if artist and artist.strip().lower() != 'unknown':
+                print(f"Skipping {filepath.name}: artist metadata already set to '{artist}'")
+                continue
+        except Exception as e:
+            print(f"Warning: Could not read metadata from {filepath.name}: {e}", file=sys.stderr)
+
         samples = load_audio(filepath)
+        time.sleep(args.delay)  # Sleep to avoid sending requests too quickly
 
         signature_generator = SignatureGenerator()
         signature_generator.feed_input(samples)
@@ -140,6 +182,44 @@ def main():
                 metadata = extract_metadata(results)
                 coverart_path = download_cover_art(metadata["coverarturl"], filepath)
                 set_mp3_metadata(filepath, metadata, coverart_path)
+                
+                # Rename file to '<artist> - <title>.mp3' if --rename flag is set
+                if args.rename:
+                    unsafe = '\\/:*?"<>|'
+
+                    def sanitize(text, fallback):
+                        cleaned = ''.join('-' if (c in unsafe or ord(c) < 32) else c for c in (text or fallback))
+                        cleaned = cleaned.strip()
+                        return cleaned or fallback
+
+                    artist = sanitize(metadata.get("artist", "Unknown Artist"), "Unknown Artist")
+                    title = sanitize(metadata.get("title", "Unknown Title"), "Unknown Title")
+
+                    ext = filepath.suffix or ".mp3"
+                    base_name = f"{artist} - {title}"
+                    max_filename_length = 128
+                    max_base_length = max(1, max_filename_length - len(ext))
+                    if len(base_name) > max_base_length:
+                        base_name = base_name[:max_base_length].rstrip()
+
+                    new_name = f"{base_name}{ext}"
+                    new_path = filepath.with_name(new_name)
+
+                    if new_path.exists() and new_path != filepath:
+                        if args.overwrite:
+                            new_path.unlink()
+                        else:
+                            print(f"File {new_name} already exists, not renaming. Use --overwrite to replace existing files.", file=sys.stderr)
+                            print(f"Finished writing metadata for {filepath.stem}.mp3")
+                            break
+
+                    if new_path != filepath:
+                        filepath.rename(new_path)
+                        filepath = new_path
+                        print(f"Renamed file to {new_name}")
+                    else:
+                        print(f"File already has the correct name: {new_name}")
+                
                 print(f"Finished writing metadata for {filepath.stem}.mp3")
                 break
             else:
