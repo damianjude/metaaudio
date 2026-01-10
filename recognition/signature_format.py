@@ -100,16 +100,26 @@ class DecodedMessage:
         header = RawSignatureHeader()
         buf.readinto(header)
 
-        assert header.magic1 == 0xcafe2580
-        assert header.size_minus_header == len(data) - 48
-        assert crc32(checksummable_data) & 0xffffffff == header.crc32
-        assert header.magic2 == 0x94119c00
+        if header.magic1 != 0xcafe2580:
+            raise ValueError("invalid signature header (magic1)")
+        if header.size_minus_header != len(data) - 48:
+            raise ValueError("invalid signature size")
+        if (crc32(checksummable_data) & 0xffffffff) != header.crc32:
+            raise ValueError("invalid signature checksum")
+        if header.magic2 != 0x94119c00:
+            raise ValueError("invalid signature header (magic2)")
 
-        self.sample_rate_hz = int(SampleRate(header.shifted_sample_rate_id >> 27).name.strip('_'))
+        try:
+            self.sample_rate_hz = int(SampleRate(header.shifted_sample_rate_id >> 27).name.strip('_'))
+        except ValueError as exc:
+            raise ValueError("unsupported sample rate id") from exc
+
         self.number_samples = int(header.number_samples_plus_divided_sample_rate - self.sample_rate_hz * 0.24)
 
-        assert int.from_bytes(buf.read(4), 'little') == 0x40000000
-        assert int.from_bytes(buf.read(4), 'little') == len(data) - 48
+        if int.from_bytes(buf.read(4), 'little') != 0x40000000:
+            raise ValueError("invalid signature body header")
+        if int.from_bytes(buf.read(4), 'little') != len(data) - 48:
+            raise ValueError("invalid signature body size")
 
         self.frequency_band_to_sound_peaks = {}
 
