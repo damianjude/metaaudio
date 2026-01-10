@@ -6,6 +6,7 @@ import numpy as np
 import resampy
 import soundfile as sf
 import time
+from urllib.parse import urlparse
 
 from pathlib import Path
 from argparse import ArgumentParser
@@ -16,19 +17,48 @@ from mutagen.id3._frames import APIC, TIT2, TPE1, TALB, TCON, TPUB, TYER, TDRC
 from recognition.communication import recognise_song_from_signature
 from recognition.algorithm import SignatureGenerator
 
+MAX_COVERART_BYTES = 5 * 1024 * 1024
+
+
+def _is_within_directory(path: Path, base_dir: Path) -> bool:
+    try:
+        path.resolve().relative_to(base_dir.resolve())
+        return True
+    except (ValueError, OSError):
+        return False
+
 
 def download_cover_art(url, filepath):
     if not url:
         return None
 
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+
     coverart_path = filepath.with_suffix('.jpeg')
 
     try:
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-    except requests.RequestException:
+        with requests.get(url, timeout=10, stream=True) as response:
+            response.raise_for_status()
+
+            content_type = response.headers.get("Content-Type", "").lower()
+            if not content_type.startswith("image/"):
+                return None
+
+            total_bytes = 0
+            with coverart_path.open("wb") as buffer:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if not chunk:
+                        continue
+                    total_bytes += len(chunk)
+                    if total_bytes > MAX_COVERART_BYTES:
+                        coverart_path.unlink(missing_ok=True)
+                        return None
+                    buffer.write(chunk)
+    except (requests.RequestException, OSError):
+        coverart_path.unlink(missing_ok=True)
         return None
-    coverart_path.write_bytes(response.content)
 
     return coverart_path
 
@@ -139,7 +169,25 @@ def main():
         print("No MP3 files found in the specified directory.", file=sys.stderr)
         sys.exit(1)
 
+    base_dir = input_dir.resolve()
+
     for filepath in mp3_files:
+
+        if filepath.is_symlink():
+            print(f"Skipping {filepath.name}: symlinked files are not processed", file=sys.stderr)
+            continue
+
+        try:
+            resolved_path = filepath.resolve()
+        except OSError as exc:
+            print(f"Skipping {filepath.name}: could not resolve path ({exc})", file=sys.stderr)
+            continue
+
+        if not _is_within_directory(resolved_path, base_dir):
+            print(f"Skipping {filepath.name}: file is outside the target directory", file=sys.stderr)
+            continue
+
+        filepath = resolved_path
 
         # Skip files that already have artist metadata not equal to 'Unknown'
         try:
@@ -189,7 +237,7 @@ def main():
 
                     def sanitize(text, fallback):
                         cleaned = ''.join('-' if (c in unsafe or ord(c) < 32) else c for c in (text or fallback))
-                        cleaned = cleaned.strip()
+                        cleaned = cleaned.strip().lstrip('.')
                         return cleaned or fallback
 
                     artist = sanitize(metadata.get("artist", "Unknown Artist"), "Unknown Artist")

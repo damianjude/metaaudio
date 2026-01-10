@@ -3,6 +3,7 @@
 import os
 import sys
 import argparse
+from pathlib import Path
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, ID3NoHeaderError
 from mutagen.flac import FLAC
@@ -11,6 +12,14 @@ from mutagen.aiff import AIFF
 from mutagen import MutagenError
 
 SUPPORTED_FORMATS = {'.mp3', '.flac', '.wav', '.aiff'}
+
+
+def _is_within_directory(path: Path, base_dir: Path) -> bool:
+    try:
+        path.resolve().relative_to(base_dir)
+        return True
+    except (ValueError, OSError):
+        return False
 
 def remove_metadata(filepath, file_ext):
     try:
@@ -54,13 +63,23 @@ def remove_metadata(filepath, file_ext):
         print(f"Error removing metadata from {filepath}: {e}")
 
 def process_directory(directory):
+    base_dir = Path(directory).resolve()
+
     for root, _, files in os.walk(directory):
         for file in files:
-            filepath = os.path.join(root, file)
-            file_ext = os.path.splitext(file)[1].lower()
+            filepath = Path(root) / file
+            file_ext = filepath.suffix.lower()
+
+            if filepath.is_symlink():
+                sys.stderr.write(f"Skipping symlinked file: {filepath}\n")
+                continue
+
+            if not _is_within_directory(filepath, base_dir):
+                sys.stderr.write(f"Skipping file outside target directory: {filepath}\n")
+                continue
 
             if file_ext in SUPPORTED_FORMATS:
-                remove_metadata(filepath, file_ext)
+                remove_metadata(str(filepath), file_ext)
             else:
                 print(f"Skipped unsupported file: {filepath}")  # Optional if you want to see skipped files
 
