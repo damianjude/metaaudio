@@ -43,7 +43,7 @@ def download_cover_art(url, filepath):
             response.raise_for_status()
 
             content_type = response.headers.get("Content-Type", "").lower()
-            if not content_type.startswith("image/"):
+            if content_type not in ("image/jpeg", "image/jpg"):
                 return None
 
             total_bytes = 0
