@@ -16,7 +16,7 @@ SUPPORTED_FORMATS = {'.mp3', '.flac', '.wav', '.aiff'}
 
 def _is_within_directory(path: Path, base_dir: Path) -> bool:
     try:
-        path.resolve().relative_to(base_dir)
+        path.resolve().relative_to(base_dir.resolve())
         return True
     except (ValueError, OSError):
         return False
