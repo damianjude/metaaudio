@@ -18,6 +18,7 @@ from mutagen.id3._frames import APIC, TIT2, TPE1, TALB, TCON, TPUB, TYER, TDRC
 
 from recognition.communication import recognise_song_from_signature
 from recognition.algorithm import SignatureGenerator
+from utils import _is_within_directory
 
 MAX_COVERART_BYTES = 5 * 1024 * 1024
 
@@ -34,40 +35,43 @@ def _is_public_host(host: str) -> bool:
             or ip_obj.is_unspecified
         )
     except ValueError:
-        try:
-            addr_info = socket.getaddrinfo(host, None)
-        except socket.gaierror:
-            return False
+        pass
 
-        if not addr_info:
-            return False
-
-        for _, _, _, _, sockaddr in addr_info:
-            ip_str = sockaddr[0]
-            try:
-                ip_obj = ipaddress.ip_address(ip_str)
-            except ValueError:
-                return False
-
-            if (
-                ip_obj.is_private
-                or ip_obj.is_loopback
-                or ip_obj.is_link_local
-                or ip_obj.is_reserved
-                or ip_obj.is_multicast
-                or ip_obj.is_unspecified
-            ):
-                return False
-
-        return True
-
-
-def _is_within_directory(path: Path, base_dir: Path) -> bool:
     try:
-        path.resolve().relative_to(base_dir.resolve())
-        return True
-    except (ValueError, OSError):
+        addr_info = socket.getaddrinfo(host, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+    except socket.gaierror:
         return False
+
+    if not addr_info:
+        return False
+
+    seen_addresses = set()
+    public_found = False
+
+    for _, _, _, _, sockaddr in addr_info:
+        ip_str = sockaddr[0]
+        if ip_str in seen_addresses:
+            continue
+        seen_addresses.add(ip_str)
+
+        try:
+            ip_obj = ipaddress.ip_address(ip_str)
+        except ValueError:
+            continue
+
+        if (
+            ip_obj.is_private
+            or ip_obj.is_loopback
+            or ip_obj.is_link_local
+            or ip_obj.is_reserved
+            or ip_obj.is_multicast
+            or ip_obj.is_unspecified
+        ):
+            continue
+
+        public_found = True
+
+    return public_found
 
 
 def download_cover_art(url, filepath):
@@ -76,9 +80,12 @@ def download_cover_art(url, filepath):
 
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        print(f"Skipping cover art: unsupported URL {url}", file=sys.stderr)
         return None
 
-    if not _is_public_host(parsed.hostname or ""):
+    hostname = parsed.hostname
+    if not hostname or not _is_public_host(hostname):
+        print(f"Skipping cover art: non-public host {hostname or '[missing]'}", file=sys.stderr)
         return None
 
     coverart_path = filepath.with_suffix('.jpeg')
@@ -88,7 +95,9 @@ def download_cover_art(url, filepath):
             response.raise_for_status()
 
             content_type = response.headers.get("Content-Type", "").lower()
-            if content_type not in ("image/jpeg", "image/jpg"):
+            content_base = content_type.split(";", 1)[0].strip()
+            if not (content_base.startswith("image/jpeg") or content_base.startswith("image/jpg")):
+                print(f"Skipping cover art: unsupported content type {content_type or '[missing]'}", file=sys.stderr)
                 return None
 
             total_bytes = 0
@@ -98,10 +107,12 @@ def download_cover_art(url, filepath):
                         continue
                     total_bytes += len(chunk)
                     if total_bytes > MAX_COVERART_BYTES:
+                        print(f"Skipping cover art: exceeds {MAX_COVERART_BYTES} bytes limit", file=sys.stderr)
                         coverart_path.unlink(missing_ok=True)
                         return None
                     buffer.write(chunk)
     except (requests.RequestException, OSError):
+        print("Skipping cover art: download error", file=sys.stderr)
         coverart_path.unlink(missing_ok=True)
         return None
 

@@ -10,16 +10,9 @@ from mutagen.flac import FLAC
 from mutagen.wave import WAVE
 from mutagen.aiff import AIFF
 from mutagen import MutagenError
+from utils import _is_within_directory
 
 SUPPORTED_FORMATS = {'.mp3', '.flac', '.wav', '.aiff'}
-
-
-def _is_within_directory(path: Path, base_dir: Path) -> bool:
-    try:
-        path.resolve().relative_to(base_dir.resolve())
-        return True
-    except (ValueError, OSError):
-        return False
 
 def remove_metadata(filepath, file_ext):
     try:
@@ -68,18 +61,25 @@ def process_directory(directory):
     for root, _, files in os.walk(directory):
         for file in files:
             filepath = Path(root) / file
-            file_ext = filepath.suffix.lower()
 
             if filepath.is_symlink():
                 sys.stderr.write(f"Skipping symlinked file: {filepath}\n")
                 continue
 
-            if not _is_within_directory(filepath, base_dir):
+            try:
+                resolved_path = filepath.resolve()
+            except OSError as exc:
+                sys.stderr.write(f"Skipping file with unresolved path: {filepath} ({exc})\n")
+                continue
+
+            file_ext = resolved_path.suffix.lower()
+
+            if not _is_within_directory(resolved_path, base_dir):
                 sys.stderr.write(f"Skipping file outside target directory: {filepath}\n")
                 continue
 
             if file_ext in SUPPORTED_FORMATS:
-                remove_metadata(str(filepath), file_ext)
+                remove_metadata(str(resolved_path), file_ext)
             else:
                 print(f"Skipped unsupported file: {filepath}")  # Optional if you want to see skipped files
 
