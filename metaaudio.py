@@ -190,14 +190,17 @@ def load_audio(filepath):
     if samples.ndim > 1:
         samples = np.mean(samples, axis=1)
 
+    orig_kind = samples.dtype.kind
+    orig_dtype = samples.dtype
+
     if samplerate != 16000:
         samples = resampy.resample(samples.astype('float32'), samplerate, 16000)
 
     # Normalize integer PCM to float in [-1, 1] to avoid wraparound
-    if samples.dtype.kind in {'i', 'u'}:
-        info = np.iinfo(samples.dtype)
+    if orig_kind in {'i', 'u'}:
+        info = np.iinfo(orig_dtype)
         samples = samples.astype('float32')
-        if samples.dtype.kind == 'u':
+        if orig_kind == 'u':
             midpoint = info.max / 2.0
             samples = (samples - midpoint) / midpoint
         else:
