@@ -55,6 +55,7 @@ class RingBuffer:
 class SignatureGenerator:
     def __init__(self):
         self.input_pending_processing: np.ndarray = np.array([], dtype=np.int16)
+        self._pending_chunks = []
         self.samples_processed = 0
 
         self.ring_buffer_of_samples = RingBuffer(2048, 0)
@@ -70,9 +71,27 @@ class SignatureGenerator:
         self.next_signature.frequency_band_to_sound_peaks = {}
 
     def feed_input(self, s16le_mono_samples: List[int]):
-        self.input_pending_processing = np.concatenate((self.input_pending_processing, np.array(s16le_mono_samples, dtype=np.int16)))
+        chunk = np.array(s16le_mono_samples, dtype=np.int16)
+        if chunk.size:
+            self._pending_chunks.append(chunk)
 
     def get_next_signature(self) -> Optional[DecodedMessage]:
+        if self.samples_processed:
+            if self.samples_processed >= len(self.input_pending_processing):
+                self.input_pending_processing = np.array([], dtype=np.int16)
+            else:
+                self.input_pending_processing = self.input_pending_processing[self.samples_processed:]
+            self.samples_processed = 0
+
+        if self._pending_chunks:
+            if self.input_pending_processing.size:
+                self.input_pending_processing = np.concatenate([self.input_pending_processing, *self._pending_chunks])
+            elif len(self._pending_chunks) == 1:
+                self.input_pending_processing = self._pending_chunks[0]
+            else:
+                self.input_pending_processing = np.concatenate(self._pending_chunks)
+            self._pending_chunks.clear()
+
         if len(self.input_pending_processing) - self.samples_processed < 128:
             return None
 

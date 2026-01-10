@@ -12,13 +12,19 @@ _locale = 'en-US'
 _first_uuid = str(uuid5(NAMESPACE_DNS, str(getnode()))).upper()
 _second_uuid = str(uuid5(NAMESPACE_URL, str(getnode())))
 _timezones = [tz for tz in available_timezones() if tz.startswith('Europe/')]
+if not _timezones:
+    _timezones = ['UTC']
+
+
+def _clamp(value: float, min_value: float, max_value: float) -> float:
+    return max(min_value, min(max_value, value))
 
 def recognise_song_from_signature(signature: DecodedMessage) -> dict:
     fuzz = random() * 15.3 - 7.65
 
     altitude = random() * 400 + 100 + fuzz
-    latitude = random() * 180 - 90 + fuzz
-    longitude = random() * 360 - 180 + fuzz
+    latitude = _clamp(random() * 180 - 90 + fuzz, -90.0, 90.0)
+    longitude = _clamp(random() * 360 - 180 + fuzz, -180.0, 180.0)
     timestamp_ms = int(time() * 1000)
 
     try:
