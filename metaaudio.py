@@ -6,6 +6,8 @@ import numpy as np
 import resampy
 import soundfile as sf
 import time
+import socket
+import ipaddress
 from urllib.parse import urlparse
 
 from pathlib import Path
@@ -18,6 +20,46 @@ from recognition.communication import recognise_song_from_signature
 from recognition.algorithm import SignatureGenerator
 
 MAX_COVERART_BYTES = 5 * 1024 * 1024
+
+
+def _is_public_host(host: str) -> bool:
+    try:
+        ip_obj = ipaddress.ip_address(host)
+        return not (
+            ip_obj.is_private
+            or ip_obj.is_loopback
+            or ip_obj.is_link_local
+            or ip_obj.is_reserved
+            or ip_obj.is_multicast
+            or ip_obj.is_unspecified
+        )
+    except ValueError:
+        try:
+            addr_info = socket.getaddrinfo(host, None)
+        except socket.gaierror:
+            return False
+
+        if not addr_info:
+            return False
+
+        for _, _, _, _, sockaddr in addr_info:
+            ip_str = sockaddr[0]
+            try:
+                ip_obj = ipaddress.ip_address(ip_str)
+            except ValueError:
+                return False
+
+            if (
+                ip_obj.is_private
+                or ip_obj.is_loopback
+                or ip_obj.is_link_local
+                or ip_obj.is_reserved
+                or ip_obj.is_multicast
+                or ip_obj.is_unspecified
+            ):
+                return False
+
+        return True
 
 
 def _is_within_directory(path: Path, base_dir: Path) -> bool:
@@ -34,6 +76,9 @@ def download_cover_art(url, filepath):
 
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+
+    if not _is_public_host(parsed.hostname or ""):
         return None
 
     coverart_path = filepath.with_suffix('.jpeg')
