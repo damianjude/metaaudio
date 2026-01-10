@@ -193,10 +193,16 @@ def load_audio(filepath):
     if samplerate != 16000:
         samples = resampy.resample(samples.astype('float32'), samplerate, 16000)
 
-    # Normalize non-float integer types to avoid wraparound when casting to int16
+    # Normalize integer PCM to float in [-1, 1] to avoid wraparound
     if samples.dtype.kind in {'i', 'u'}:
-        max_int = np.iinfo(samples.dtype).max or 1
-        samples = samples.astype('float32') / max_int
+        info = np.iinfo(samples.dtype)
+        samples = samples.astype('float32')
+        if samples.dtype.kind == 'u':
+            midpoint = info.max / 2.0
+            samples = (samples - midpoint) / midpoint
+        else:
+            max_int = max(abs(info.min), info.max) or 1
+            samples = samples / max_int
 
     samples = np.clip(samples, -1.0, 1.0)
     samples = (samples * 32767).astype(np.int16)
