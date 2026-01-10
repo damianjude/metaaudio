@@ -155,6 +155,9 @@ def set_mp3_metadata(filepath, metadata, coverart_path):
     if audio.tags is None:
         audio.tags = ID3()
 
+    for frame in ("TIT2", "TPE1", "TALB", "TCON", "TPUB", "TYER", "TDRC", "APIC"):
+        audio.tags.delall(frame)
+
     audio.tags.add(TIT2(encoding=3, text=metadata["title"]))
     audio.tags.add(TPE1(encoding=3, text=metadata["artist"]))
     audio.tags.add(TALB(encoding=3, text=metadata["album"]))
@@ -190,11 +193,13 @@ def load_audio(filepath):
     if samplerate != 16000:
         samples = resampy.resample(samples.astype('float32'), samplerate, 16000)
 
-    if samples.dtype.kind == 'f':
-        samples = np.clip(samples, -1.0, 1.0)
-        samples = (samples * 32767).astype(np.int16)
-    else:
-        samples = samples.astype(np.int16)
+    # Normalize non-float integer types to avoid wraparound when casting to int16
+    if samples.dtype.kind in {'i', 'u'}:
+        max_int = np.iinfo(samples.dtype).max or 1
+        samples = samples.astype('float32') / max_int
+
+    samples = np.clip(samples, -1.0, 1.0)
+    samples = (samples * 32767).astype(np.int16)
 
     return samples
 
@@ -263,14 +268,18 @@ def main():
         time.sleep(args.delay)  # Sleep to avoid sending requests too quickly
 
         signature_generator = SignatureGenerator()
-        signature_generator.feed_input(samples)
-
         signature_generator.MAX_TIME_SECONDS = 12
         duration_seconds = len(samples) / 16000
 
+        # Use a centered 12-second window on long files to skip lengthy intros/outros
         if duration_seconds > 36:
-            skip_samples = 16000 * (int(duration_seconds / 2) - 6)
-            signature_generator.samples_processed += int(skip_samples)
+            start = max(0, int((duration_seconds / 2 - 6) * 16000))
+            end = start + 12 * 16000
+            samples_slice = samples[start:end]
+        else:
+            samples_slice = samples
+
+        signature_generator.feed_input(samples_slice)
 
         results = "(Not enough data)"
 
@@ -282,7 +291,11 @@ def main():
 
             results = recognise_song_from_signature(signature)
 
-            if results["matches"]:
+            if results.get("error"):
+                print(f"Recognition failed for {filepath.stem}: {results['error']}", file=sys.stderr)
+                break
+
+            if results.get("matches"):
                 metadata = extract_metadata(results)
                 coverart_path = download_cover_art(metadata["coverarturl"], filepath)
                 set_mp3_metadata(filepath, metadata, coverart_path)
