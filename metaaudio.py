@@ -283,6 +283,10 @@ def main():
 
         results = "(Not enough data)"
 
+        backoff_base = max(args.delay, 0.5)
+        max_retries = 3
+        retry = 0
+
         while True:
             signature = signature_generator.get_next_signature()
             if not signature:
@@ -292,8 +296,15 @@ def main():
             results = recognise_song_from_signature(signature)
 
             if results.get("error"):
-                print(f"Recognition failed for {filepath.stem}: {results['error']}", file=sys.stderr)
-                break
+                retry += 1
+                if retry > max_retries:
+                    print(f"Recognition failed for {filepath.stem} after {max_retries} retries: {results['error']}", file=sys.stderr)
+                    break
+
+                backoff = max(backoff_base, backoff_base * (2 ** (retry - 1)))
+                print(f"Recognition error for {filepath.stem}: {results['error']}. Retrying in {backoff:.2f}s...", file=sys.stderr)
+                time.sleep(backoff)
+                continue
 
             if results.get("matches"):
                 metadata = extract_metadata(results)
