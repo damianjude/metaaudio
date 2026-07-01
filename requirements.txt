@@ -1,5 +1,5 @@
 numpy>=2.0.0
 resampy>=0.4.3
-soundfile>=0.13.1
+soundfile>=0.14.0
 requests>=2.32.3
 mutagen>=1.47.0
